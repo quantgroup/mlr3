@@ -3,6 +3,10 @@
 # Exceptions here are possibly encapsulated, so that they get captured
 # and turned into log messages.
 train_wrapper = function(learner, task) {
+  if (length(task$feature_names) == 0L && "featureless" %nin% learner$properties) {
+    stopf("Learner '%s' cannot work on feature-less task '%s'", learner$id, task$id)
+  }
+
   model = learner$train_internal(task = task)
 
   if (is.null(model)) {
@@ -89,6 +93,14 @@ learner_predict = function(learner, task, row_ids = NULL) {
       task$row_roles$use = prev_use
     }, add = TRUE)
     task$row_roles$use = row_ids
+  }
+
+  if (task$nrow == 0L) {
+    # return an empty prediction object, #421
+    learner$state$log = append_log(learner$state$log, "predict", "output", "No data to predict on")
+    tt = task$task_type
+    f = mlr_reflections$task_types[list(tt), "prediction", with = FALSE][[1L]]
+    return(get(f)$new(task = task))
   }
 
   if (is.null(learner$model)) {

@@ -45,6 +45,7 @@ Feature types the learner operates on. Must be a subset of \code{\link[=mlr_refl
 Set of properties of the learner. Must be a subset of \code{\link[=mlr_reflections]{mlr_reflections$learner_properties}}.
 The following properties are currently standardized and understood by learners in \CRANpkg{mlr3}:
 \itemize{
+\item \code{"featureless"}: The learner only operates on the target column(s).
 \item \code{"missings"}: The learner can handle missing values in the data.
 \item \code{"weights"}: The learner supports observation weights.
 \item \code{"importance"}: The learner supports extraction of importance scores, i.e. comes with a \code{importance()} extractor function (see section on optional extractors).
