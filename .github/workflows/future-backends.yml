@@ -1,0 +1,96 @@
+on:
+  push:
+  pull_request:
+  # for now, CRON jobs only run on the default branch of the repo (i.e. usually on master)
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron: "0 4 * * *"
+
+name: Test future backends
+
+jobs:
+  R-CMD-check:
+    runs-on: ${{ matrix.config.os }}
+
+    name: '${{ matrix.config.backend }}'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        - os: ubuntu-latest
+          r: "release"
+          backend: "cluster"
+        - os: ubuntu-latest
+          r: "release"
+          backend: "multicore"
+        - os: ubuntu-latest
+          r: "release"
+          backend: "multiprocess"
+        - os: ubuntu-latest
+          r: "release"
+          backend: "multisession"
+        - os: ubuntu-latest
+          r: "release"
+          backend: "sequential"
+        - os: ubuntu-latest
+          r: "release"
+          backend: "future.batchtools::batchtools_local"
+        - os: ubuntu-latest
+          r: "release"
+          backend: "future.BatchJobs::batchjobs_local"
+        - os: ubuntu-latest
+          r: "release"
+          backend: "future.callr::callr"
+
+    env:
+      # otherwise remotes::fun() errors cause the build to fail. Example: Unavailability of binaries
+      R_REMOTES_NO_ERRORS_FROM_WARNINGS: true
+      CRAN: ${{ matrix.config.cran }}
+      # we are not allowed to write to ~/.ccache on GH Actions
+      # setting some ccache options
+      CCACHE_BASEDIR: ${{ GITHUB.WORKSPACE }}
+      CCACHE_DIR: ${{ GITHUB.WORKSPACE }}/.ccache
+      CCACHE_NOHASHDIR: true
+      CCACHE_SLOPPINESS: include_file_ctime
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: r-lib/actions/setup-r@master
+        with:
+          r-version: ${{ matrix.config.r }}
+          Ncpus: 4
+
+      # set date/week for use in cache creation
+      # https://github.community/t5/GitHub-Actions/How-to-set-and-access-a-Workflow-variable/m-p/42970
+      # - cache R packages daily
+      # - cache ccache weekly -> 'ccache' helps rebuilding the package cache faster
+      - name: "[Cache] Prepare daily timestamp for cache"
+        id: date
+        run: echo "::set-output name=date::$(date '+%d-%m')"
+
+      - name: "[Cache] Cache R packages"
+        uses: pat-s/always-upload-cache@v1.1.4
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: ${{ runner.os }}-r-${{ matrix.config.r }}-${{steps.date.outputs.date}}
+          restore-keys: ${{ runner.os }}-r-${{ matrix.config.r }}-${{steps.date.outputs.date}}
+
+      # install ccache and write config file
+      - name: "[Linux] ccache"
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt install ccache libcurl4-openssl-dev
+          mkdir -p ~/.R && echo -e 'CXX_STD = CXX14\n\nCC=ccache gcc -std=gnu99\nCXX=ccache g++\nCXX11=ccache g++ -std=gnu99\nCXX14=ccache g++ -std=gnu99\nC11=ccache g++\nC14=ccache g++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
+
+      - name: "[Stage] Install dependencies"
+        run: |
+          Rscript -e "if (!requireNamespace('future.tests')) install.packages('future.tests')"
+          Rscript -e "if (!requireNamespace('future.callr')) install.packages('future.callr')"
+          Rscript -e "if (!requireNamespace('future.batchtools')) install.packages('future.batchtools')"
+          Rscript -e "if (!requireNamespace('future.BatchJobs')) install.packages('future.BatchJobs')"
+
+      - name: "[Stage] Check future plans"
+        run: |
+          Rscript -e "future.tests::check(plan = '${{matrix.config.backend}}')"
