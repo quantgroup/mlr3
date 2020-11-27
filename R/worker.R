@@ -219,8 +219,10 @@ workhorse = function(iteration, task, learner, resampling, lgr_threshold = NULL,
   pdatas = discard(pdatas, is.null)
 
   if (!store_models) {
+    tmp <- learner$state$model$classif.ranger$model$forest$split.varIDs
     lg$debug("Erasing stored model for learner '%s'", learner$id)
     learner$state$model = NULL
+    if(!is.null(tmp)) learner$state$model$classif.ranger$model$forest$split.varIDs <- tmp
   }
 
   list(learner_state = learner$state, prediction = pdatas)
